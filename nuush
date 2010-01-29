@@ -541,63 +541,64 @@ echo "$feed_troff" | \
 exit 0
 }
 
-case "$1" in
-	-e) # EXPORT
-	;;
-	-i) if [[ -n "$2" ]]
-		then
-			opml2import=$2
-			non_interactive=1
-			import_export import && exit 0
-		else
-			echo "You must specify an argument (the file you want to import)"
-			usage
-		fi
-	;;
-	-p) if [[ -n "$2" ]]
-		then
-			FEEDS=$($xml sel -t -m / -e feeds -c "feeds/item[tag='$2']" $file_feeds)
-		else
-			printf "Do you really want to print ALL your feeds? [y/N]\n$prompt"
-			read confirm_noprint
-			if [[ "$confirm_mod" = [yY]* ]]
+if [[ -n "$1" ]]
+then
+	non_interactive=1
+
+	case "$1" in
+		-e) "Sorry, not yet implemented" && exit 0
+		;;
+		-i) if [[ -n "$2" ]]
 			then
-				FEEDS=$(<$file_feeds)
+				opml2import=$2
+				import_export import && exit 0
 			else
-				exit 0
+				echo "Specify the file to import"
+				usage
 			fi
-		fi
+		;;
+		-p) if [[ -z "$2" ]]
+			then
+				printf "Print ALL your feeds? [y/N]\n$prompt"
+				read confirm_noprint
 
-		data_to_print=$(echo "$FEEDS" | \
-		  $xml sel -t -m /feeds/item -v xml -i "position()!=last()" -n)
-		print_feeds
+				if [[ "$confirm_mod" = [yY]* ]]
+				then
+					feed_list_file > $file_feeds.tmp
+				else
+					exit 0
+				fi
+			else
+				feed_list_file | grep ".*\t.*\t.*$tag" > $file_feeds.tmp
+			fi
 
-	;;
-	-t) if [[ -n "$2" ]]
-		then
-			tag=$2
-		else
-			echo "You must specify an argument (a tag)"
-			usage
-		fi
-	;;
-	-r|-s) [[ "$1" = '-r' ]] && force_reload=1
-		if [[ -n "$2" ]]
-		then
-			FEEDS=$($xml sel -t -m / -e feeds -c "feeds/item[tag='$2']" $file_feeds)
-		else
-			FEEDS=$(<$file_feeds)
-		fi
-		data_to_sync=$(echo "$FEEDS" | \
-		  $xml sel -t -m /feeds/item -v xml -i "position()!=last()" -n)
-		non_interactive=1
-		sync_data
-	;;
-	'') # No argument => continue
-	;;
-	*) usage
-	;;
-esac
+			data_to_print=$(cut -f 2 $file_feeds.tmp)
+			print_feeds
+		;;
+		-t)	unset non_interactive
+			if [[ -n "$2" ]]
+			then
+				tag=$2
+			else
+				echo "Specify a tag"
+				usage
+			fi
+		;;
+		-u|-f) [[ "$1" = '-u' ]] && force_reload=1
+			if [[ -z "$2" ]]
+			then
+				feed_list_file > $file_feeds.tmp
+			else
+				feed_list_file | grep ".*\t.*\t.*$tag" > $file_feeds.tmp
+			fi
+			data_to_sync=$(cut -f 2 $file_feeds.tmp)
+			sync_data
+			exit 0
+		;;
+		*) usage
+		;;
+	esac
+fi
 
 show_feed_list()
 {
