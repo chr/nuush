@@ -1,0 +1,19 @@
+NUUSH
+=====
+
+Nuush is a shell script that lets you to keep track of your web feeds and
+read them on your terminal. In short, it's a command line feed reader. It
+has a really simple interface and it's very configurable.
+
+The script has been tested with Bash and Ksh93, both on BSD (NetBSD) and
+Linux (Debian). Besides common Unix tools (e.g., awk, grep, sed) you will
+need XMLStarlet: http://xmlstar.sourceforge.net/
+
+Nuush is free and unencumbered public domain software. For more information,
+see http://unlicense.org/ or the accompanying UNLICENSE file.
+
+Website: http://chr.tx0.org/nuush
+Screenshots/screencast: http://chr.tx0.org/nuush#screen
+
+NOTE: So far, nuush has worked fine. However, it's a work in progress so
+expect some bugs.

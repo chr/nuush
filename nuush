@@ -1,0 +1,802 @@
+#!/usr/bin/env bash
+
+# chr http://chr.tx0.org/
+
+# Nuush is free and unencumbered public domain software. For more information,
+# see http://unlicense.org/ or the accompanying UNLICENSE file.
+
+umask 0027
+trap 'rm -rf $cache/*.{tmp,src} $file_feeds.tmp' EXIT
+
+usage()
+{
+case $1 in
+	number)
+		echo "A number was expected"
+		exit 1 ;;
+	limits)
+		echo "A number greater than 0 and less or equal to $2"
+		exit 1 ;;
+	not_found)
+		echo "$2 not found"
+		exit 1 ;;
+	no_exe)
+		echo "$2 is not installed on your system"
+		exit 1 ;;
+	*)
+		echo 'A detailed documentation is needed!'
+		echo 'Meanwhile you can see http://chr.tx0.org/nuush#documentation'
+		exit 1 ;;
+esac
+}
+
+if [[ -x $(which xml) ]]
+then
+	xml=xml
+elif [[ -x $(which xmlstarlet) ]]
+then
+	xml=xmlstarlet
+else
+	usage no_exe "xml/xmlstarlet"
+fi
+
+
+for i in sed awk grep date cut mkdir cat mv cp rm tput
+do
+	[[ ! -x $(which $i) ]] && usage no_exe $i
+done
+
+NUUSHDIR=${HOME}/.nuush
+[[ ! -d "$NUUSHDIR" ]] && mkdir $NUUSHDIR
+
+oldIFS=$IFS
+
+if [[ ! -f "${NUUSHDIR}"/nuush.conf ]]
+then
+cat << EOF > $NUUSHDIR/nuush.conf
+# See: http://chr.tx0.org/nuush#documentation
+cache=$NUUSHDIR/cache
+file_feeds=$NUUSHDIR/feed_list.txt
+browser=elinks
+browser_alt='screen elinks'
+browser_print='elinks -dump -force-html -no-references -no-numbering | grep -v "^ *\[.*\]$"'
+# An alternative for $browser_print:
+#browser_print='lynx -stdin -dump -force_html -hiddenlinks=ignore -nolist | grep -v "^\[.*\]$"'
+
+max_items=9
+prompt='>> '
+#
+########## KEYS
+#
+key_add=a
+key_browser=g
+key_browseralt=G
+key_change=c
+key_delfeed=d
+key_import=i
+key_list=l
+key_print=p
+key_printall=P
+key_quit=q
+key_quitall=Q
+key_refresh=f
+key_refreshall=F
+key_tag=t
+key_update=u
+key_updateall=U
+key_writeurl=w
+#
+### You can change $HOME for a directory available on the internet:
+file_html=$HOME/nuush-redirect.html
+file_pdf=$HOME/nuush-paper.pdf
+#
+### Define a default tag (it's optional):
+tag=
+EOF
+fi
+
+. ${NUUSHDIR}/nuush.conf
+
+cache=${cache:-${NUUSHDIR}/cache}
+file_feeds=${file_feeds:-${NUUSHDIR}/feed_list.txt}
+file_html=${file_html:-${HOME}/nuush-redirect.html}
+file_pdf=${file_pdf:-${HOME}/nuush-paper.pdf}
+browser=${browser:-elinks}
+browser_alt=${browser_alt:-'screen elinks'}
+browser_print=${browser_print:-'elinks -dump -no-references -no-numbering | grep -v "^ *\[.*\]$"'}
+max_items=${max_items:-9}
+pager=${PAGER:-more}
+prompt=${prompt:-'>> '}
+key_add=${key_add:-a}
+key_browser=${key_browser:-g}
+key_browseralt=${key_browseralt:-G}
+key_change=${key_change:-c}
+key_delfeed=${key_delfeed:-d}
+key_import=${key_import:-i}
+key_list=${key_list:-l}
+key_print=${key_print:-p}
+key_printall=${key_printall:-P}
+key_quit=${key_quit:-q}
+key_quitall=${key_quitall:-Q}
+key_refresh=${key_refresh:-f}
+key_refreshall=${key_refreshall:-F}
+key_tag=${key_tag:-t}
+key_update=${key_update:-u}
+key_updateall=${key_updateall:-U}
+key_writeurl=${key_writeurl:-w}
+
+for i in "$pager" "$browser" "$browser_alt" "$browser_print"
+do
+	i=$(echo "$i" | cut -d ' ' -f 1)
+	[[ -n "$i" && ! -x $(which $i) ]] && usage no_exe $i
+done
+
+if [[ ! -f "$file_feeds" ]]
+then
+cat << EOF > $file_feeds
+Title: The Register
+URL: http://www.theregister.co.uk/headlines.atom
+Freq: d
+Tag: news,tech
+
+Title: commandliners
+URL: http://feeds2.feedburner.com/commandliners
+Freq: w
+Tag: shell
+EOF
+fi
+
+[[ ! -d "$cache" ]] && mkdir -p $cache
+
+[[ -n "$3" ]] && usage # ./nuush option [argument]
+
+sync_data()
+{
+IFS=$oldIFS
+[[ ! -f "${cache}/last" ]] && > ${cache}/last
+last_file=${cache}/last
+
+counter=$(echo $data_to_sync | awk '{ print NF }')
+k=1
+for i in $data_to_sync
+do
+	sname=$(echo "$i" | sed 's@[:/&?]@_@g')
+
+	if [[ "$force_reload" -ne 1 ]]
+	then
+		# XXX: 1st time ??? Chek if sname !exists and synch anyway
+		last_check=$(grep "$sname" $last_file | cut -f 2)
+		update_freq=$(cut -f 4 $file_feeds.tmp)
+		case $update_freq in
+			d*|1)  freq_sec=$(( 60 * 60 * 24 )) ;;
+			b*|15) freq_sec=$(( 60 * 60 * 24 * 15 )) ;;
+			m*|30) freq_sec=$(( 60 * 60 * 24 * 30 )) ;;
+			*)     freq_sec=$(( 60 * 60 * 24 * 7 )) ;; # Weekly by default
+		esac
+
+		# -lt 0 => skip: no update required
+		[[ $(( $(date +%s) - freq_sec - last_check )) -lt 0 ]] && continue
+	fi
+
+	[[ -z "$non_interactive" ]] && echo "$(( k++ ))/$counter : $i"
+
+	# NOTE: in "downxml" sed is not always needed, but we are preventing this:
+	# http://sourceforge.net/projects/xmlstar/forums/forum/226076/topic/1425634
+	downxml=$($xml ed "$i" 2>/dev/null | sed 's/xmlns=[^ >]*//')
+
+	if [[ -n "$downxml" ]]
+	then
+		echo "$downxml" > ${cache}/${sname}.src
+		last_file2=$(grep -v "$sname" $last_file)
+		echo "$last_file2" > $last_file
+		echo "$sname	$(date +%s)" >> $last_file
+	else
+		[[ -z "$non_interactive" ]] && echo Problems downloading/parsing \"$i\"
+		exit 1
+	fi
+
+	feedtype=$($xml el ${cache}/${sname}.src | sed -n 1p)
+
+	# Check if the new file is not different
+	#case $feedtype in
+		#rss*)
+		########## ... In the TODO
+
+	if [[ -f "${cache}/${sname}" ]]
+	then
+		last_date=$(sed -n '1,/^[[:space:]]*<date>/s@^[[:space:]]*<date>\([^<][^<]*\)</date>@\1@p' ${cache}/${sname})
+		mv ${cache}/${sname} ${cache}/${sname}.old
+	fi
+
+	rsssource=$(<${cache}/${sname}.src)
+
+	# Default values (f_date_type={T=Text|N=Number})
+	f_date_type=T
+	f_title=title
+	f_descr=description
+	f_link=link
+
+	case $feedtype in
+		rss*)
+
+			# We need to transform the dates, so we can sort the feeds by date.
+			# The RSS date format is like 'Sat, 27 Jun 2009 04:44:38 +0000', so
+			# the sort is tricky. The (I hope temporary) solution is to replace
+			# the dates with epoch.
+
+			rssitems=$(grep -c '^[[:space:]]*<item' ${cache}/${sname}.src)
+			for (( i=1; i<=rssitems; i++ ))
+			do
+				rssdate=$($xml sel -t -m /rss/channel/item[$i] \
+				    -v "normalize-space(pubDate)" ${cache}/${sname}.src)
+				epoch=$(date -d "$rssdate" +%s 2>/dev/null)
+				[[ "$?" -ne 0 ]] && echo "$rssdate: Invalid date" && exit 1
+				rsssource=$(echo "$rsssource" | \
+				    $xml ed -u "/rss/channel/item[$i]/pubDate" -v $epoch)
+			done
+			f_match=/rss/channel/item
+			f_date_type=N
+			f_date=pubDate
+		;;
+
+		feed*)
+			f_match=/feed/entry
+			f_date=updated
+			f_descr=summary
+			# Check how many <summary>s and <content>s are present
+			# and use the most frequent.
+			num_summ=$(grep -c '<summary' ${cache}/${sname}.src)
+			num_cont=$(grep -c '<content' ${cache}/${sname}.src)
+			[[ "$num_summ" -lt "$num_cont" ]] && f_descr=content
+			f_link="link[@rel='alternate']/@href"
+			if test $(grep '<published' ${cache}/${sname}.src)
+			then
+				f_date=published
+			fi
+		;;
+
+		rdf*)
+			# The 'dc:date' fields are renamed (quite unnecessarily) as
+			# 'date', but this way we can avoid passing some '-N $namespace'
+			# to '$xml sel' below.
+			f_match=/rdf/item
+			f_date=date
+			rsssource=$(echo "$rsssource" | \
+			  sed 's/rdf:RDF/rdf/g;s/[a-z]*:date/date/g')
+		;;
+	esac
+
+	echo "$rsssource" | \
+	  $xml sel -t -e feed -m $f_match -s D:${f_date_type}:L $f_date -n \
+	    -e item -e title -v $f_title -b -n -e description -v $f_descr -b \
+		-n -e link -v "normalize-space(${f_link})" -b -n -e date -v $f_date | \
+	  $xml ed -d "/feed/item[position()>${max_items}]" > ${cache}/${sname}.tmp
+
+	########## XXX: This BLOCK needs to be improved
+	sed 's/^\([[:space:]]*<item\)>$/\1 status="new">/' \
+	  ${cache}/${sname}.tmp > ${cache}/${sname}
+
+	if [[ -f "${cache}/${sname}.old" ]]
+	then
+		last_pos=$(grep '^[[:space:]]*<date>' ${cache}/${sname} |\
+		    awk "/$last_date/ { print NR; exit }")
+
+		if [[ -n "$last_pos" ]]
+		then
+			# -gt 1 => update: there's at least 1 new item in the new file downloaded
+			if [[ "$last_pos" -ge 1 ]]
+			then
+				if [[ "$last_pos" -eq 1 ]] # XXX: eq ???
+				then
+					cp ${cache}/${sname}.old ${cache}/${sname}
+				else
+					recent=$(<${cache}/${sname})
+					j=1
+						for (( i=last_pos; i <= max_items; i++ ))
+						do
+							prev_stat=$($xml sel -t -m "/feed/item[$j]" \
+							  -v "@status" ${cache}/${sname}.old)
+							recent=$(echo "$recent" | \
+							  $xml ed -u "/feed/item[$i]/@status" -v $prev_stat)
+							let j++
+						done
+
+					echo "$recent" > ${cache}/${sname}
+				fi
+			fi
+		fi
+	fi
+	########## XXX: /BLOCK
+
+	rm ${cache}/${sname}.tmp
+done
+
+force_reload=''
+# $1 is the optional argument passed to sync_data
+[[ -z "$1" && -z "$non_interactive" ]] && show_feed_list
+}
+
+mod_del() {
+what2do=$1
+printf "$what2do what? [number]\n$prompt"
+read feed2md
+
+[[ "$feed2del" = [qQ] ]] && exit 0
+
+nfeeds=$(sed -n '$=' $file_feeds.tmp)
+
+if [[ "$feed2md" = *[!0-9]* ]]
+then
+	usage number
+elif [[ "$feed2md" -lt 1 && "$feed2md" -gt $nfeeds ]]
+then
+	usage limits $nfeeds
+fi
+
+printf "$what2do \"$(sed -n ${feed2md}p $file_feeds.tmp | cut -f 1)\"? [Y/n]\n$prompt"
+read confirm_md
+
+if [[ "$confirm_md" = [nN]* ]]
+then
+	echo "Nothing was modified"
+else
+	title_feed2md=$(sed -n ${feed2md}p $file_feeds.tmp | cut -f 1)
+	if [[ "$what2do" = 'Change' ]]
+	then
+		echo "Modify: 1) Title; 2) Feed URL; 3) Tag; 4) Frequency."
+		printf "$prompt"
+		read what2mod
+
+		[[ "$what2mod" = *[!0-9]* && "$what2mod" != [1-4] ]] && exit 1
+
+		prev_val=$(sed -n ${feed2md}p $file_feeds.tmp | cut -f $what2mod)
+		echo "Previous value: $prev_val"
+		printf "New value:\n$prompt"
+		read new_val_mod
+
+		printf "Is \"${new_val_mod}\" correct? [Y/n]\n$prompt"
+		read confirm_mod
+
+		if [[ "$confirm_mod" = [nN]* ]]
+		then
+			echo "Nothing was modified"
+		else
+			feed_list_file < $file_feeds > $file_feeds.tmp
+			sed "/${title_feed2md}/ s/$prev_val/$new_val_mod/" $file_feeds.tmp | \
+			  feed_group_file > $file_feeds
+		fi
+	else
+		feed_list_file < $file_feeds > $file_feeds.tmp
+		sed "/${title_feed2md}/ d" $file_feeds.tmp | feed_group_file > $file_feeds
+		# XXX: remove existing files
+	fi
+fi
+}
+
+# From $file_feeds to $file_feeds.tmp
+feed_list_file() {
+awk -F ":" '
+	function field_info () {
+		var=substr($0,length($1)+3)
+		sub(/^[[:space:]]+/,"",var)
+		return var
+	}
+	function print_info () {
+		print v_title "\t" v_xml "\t" v_tag "\t" v_freq
+	}
+	/./,/^$/ {
+		if ($1=="Title") { v_title=field_info() }
+		if ($1=="URL") { v_xml=field_info() }
+		if ($1=="Tag") { v_tag=field_info() }
+		if ($1=="Freq") { v_freq=field_info() }
+		if (NF==0) { print_info() }
+	}
+	END { if (NF!=0) { print_info() } }
+' $file_feeds
+}
+
+# XXX: field order!
+feed_group_file() {
+awk -F "\t" '{
+print "Title: " $1
+print "URL: " $2
+print "Freq: " $4
+print "Tag: " $3
+print ""}'
+}
+
+modify_feed_list()
+{
+if [[ "$answ_list" = "$key_change" ]]
+then
+	mod_del Change
+elif [[ "$answ_list" = "$key_delfeed" ]]
+then
+	mod_del Delete
+else
+	printf "Feed title (e.g., My feed)\n$prompt"
+	read nfeed_title
+
+	while [[ "$nfeed_title" = '' ]]
+	do
+		[[ "$nfeed_title" = [qQ] ]] && exit 0
+		printf "A title is required\n$prompt"
+		read nfeed_title
+	done
+
+	printf "Feed URL (e.g., http://example.net/feed.xml)\n$prompt"
+	read nfeed_url
+
+	while [[ "$nfeed_url" = '' || "$nfeed_url" = *" "* ]]
+	do
+		[[ "$nfeed_title" = [qQ] ]] && exit 0
+		printf "No spaces are allowed\n$prompt"
+		read nfeed_url
+	done
+
+	printf "Feed frequency (d=daily, w=weekly, b=biweekly, m=monthly)\n$prompt"
+	read nfeed_freq
+
+	while [[ "$nfeed_freq" != [dwbm] ]]
+	do
+		[[ "$nfeed_freq" = [qQ] ]] && exit 0
+		echo "Valid values are: d (daily), w (weekly), b (biweekly), m (monthly)"
+		printf "$prompt"
+		read nfeed_freq
+	done
+
+	printf "Feed tag[s] (a comma separated list, no spaces)\n$prompt"
+	read nfeed_tag
+
+	while [[ "$nfeed_tag" = '' || "$nfeed_tag" = *" "* ]]
+	do
+		[[ "$nfeed_title" = [qQ] ]] && exit 0
+		printf "No spaces are allowed\n$prompt"
+		read nfeed_tag
+	done
+
+	echo >> $file_feeds
+	cat <<-EOB >> $file_feeds
+	Title: $nfeed_title
+	URL: $nfeed_url
+	Freq: $nfeed_freq
+	Tag: $nfeed_tag
+EOB
+
+fi
+
+show_feed_list
+#[[ ! "$import_feeds" ]] && show_feed_list
+}
+
+import_export()
+{
+if [[ "$1" = 'import' ]]
+then
+	# XXX: absolute or relative, no path expansion
+	if [[ "$non_interactive" -ne 1  ]]
+	then
+		printf "File to import:\n$prompt"
+		read opml2import
+	fi
+
+	if [[ -f "$opml2import" ]]
+	then
+		opml_items=$($xml sel -t -m /opml/body -v "count(outline)" $opml2import)
+		for (( i=1; i<=opml_items; i++ ))
+		do
+			nfeed_title=$($xml sel -T -t -m "/opml/body/outline[$i]" \
+			  -v "@title" $opml2import)
+			nfeed_url=$($xml sel -T -t -m "/opml/body/outline[$i]" \
+			  -v "@xmlUrl" $opml2import)
+			nfeed_freq=w
+
+		echo >> $file_feeds
+		cat <<-EOB >> $file_feeds
+		Title: $nfeed_title
+		URL: $nfeed_url
+		Freq: $nfeed_freq
+		Tag: $nfeed_tag
+EOB
+		done
+
+		[[ "$non_interactive" -ne 1 ]] && show_feed_list || exit 0
+	else
+		usage not_found $opml2import
+	fi
+fi
+}
+
+print_feeds()
+{
+for i in groff ps2pdf
+do
+	[[ ! -x $i ]] && usage no_exe $i
+done
+
+IFS=$oldIFS
+feed_troff='<feed>'
+for i in $data_to_print
+do
+	sname=$(echo "$i" | sed 's@[:/&?]@_@g')
+
+	if [[ -f "${cache}/${sname}" ]]
+	then
+		feed2print=$(<${cache}/${sname})
+		# XXX: sed ... \/* => :(
+		strip=$(echo "$feed2print" | sed '/<.xml/d;/<\/*feed/d')
+		feed_troff=$(echo "$feed_troff" ; echo "$strip")
+		echo "$feed2print" | \
+		  $xml ed -u "/feed/item/@status" -v "read" > ${cache}/${sname}
+	fi
+done
+feed_troff=$(echo "$feed_troff" && echo '</feed>')
+
+echo "$feed_troff" | \
+  $xml sel -T -t -m / -o ".2C&lt;br&gt;" -n -t -m "/feed/item[@status='new']" \
+    -n -o ".LG&lt;br&gt;.B&lt;br&gt;" -n -v title \
+    -o "&lt;br&gt;.R&lt;br&gt;.NL&lt;br&gt;&lt;br&gt;" -n -v description \
+    -n -o "&lt;p&gt;&lt;/p&gt;" |\
+  eval $browser_print | sed 's/^[ ]*//g' | groff -m ms | ps2pdf - $file_pdf
+exit 0
+}
+
+case "$1" in
+	-e) # EXPORT
+	;;
+	-i) if [[ -n "$2" ]]
+		then
+			opml2import=$2
+			non_interactive=1
+			import_export import && exit 0
+		else
+			echo "You must specify an argument (the file you want to import)"
+			usage
+		fi
+	;;
+	-p) if [[ -n "$2" ]]
+		then
+			FEEDS=$($xml sel -t -m / -e feeds -c "feeds/item[tag='$2']" $file_feeds)
+		else
+			printf "Do you really want to print ALL your feeds? [y/N]\n$prompt"
+			read confirm_noprint
+			if [[ "$confirm_mod" = [yY]* ]]
+			then
+				FEEDS=$(<$file_feeds)
+			else
+				exit 0
+			fi
+		fi
+
+		data_to_print=$(echo "$FEEDS" | \
+		  $xml sel -t -m /feeds/item -v xml -i "position()!=last()" -n)
+		print_feeds
+
+	;;
+	-t) if [[ -n "$2" ]]
+		then
+			tag=$2
+		else
+			echo "You must specify an argument (a tag)"
+			usage
+		fi
+	;;
+	-r|-s) [[ "$1" = '-r' ]] && force_reload=1
+		if [[ -n "$2" ]]
+		then
+			FEEDS=$($xml sel -t -m / -e feeds -c "feeds/item[tag='$2']" $file_feeds)
+		else
+			FEEDS=$(<$file_feeds)
+		fi
+		data_to_sync=$(echo "$FEEDS" | \
+		  $xml sel -t -m /feeds/item -v xml -i "position()!=last()" -n)
+		non_interactive=1
+		sync_data
+	;;
+	'') # No argument => continue
+	;;
+	*) usage
+	;;
+esac
+
+show_feed_list()
+{
+IFS='
+'
+
+if [[ -z "$tag" ]]
+then
+	feed_list_file > $file_feeds.tmp
+else
+	feed_list_file | grep ".*\t.*\t.*$tag" > $file_feeds.tmp
+fi
+
+nfeeds=$(sed -n '$=' $file_feeds.tmp) # XXX: option to remove blanks?
+i=0
+for f in $(<$file_feeds.tmp)
+do
+	sname=$(echo "$f" | cut -f 2 | sed 's@[:/&?]@_@g')
+	LOCALXML=${cache}/${sname}
+	n='?'
+	[[ -f "$LOCALXML" ]] && n=$(grep -c 'item status="new"' $LOCALXML)
+	printf "%${#nfeeds}u) [%2s] %s\n" $(( i + 1 )) "$n" $(echo "$f" | cut -f 1)
+	let i++
+done | eval $pager
+
+select_feed
+}
+
+select_feed()
+{
+printf "$prompt"
+read answ_list
+
+if [[ "$answ_list" = *[!0-9]* ]]
+then
+	case $answ_list in
+		$key_add|$key_change|$key_delfeed)
+			modify_feed_list ;;
+		$key_quit|$key_quitall)
+			exit 0 ;;
+		$key_update|$key_updateall|$key_refresh|$key_refreshall)
+			if [[ "$answ_list" = [${key_update}${key_updateall}] ]]
+			then
+				force_reload=1
+			fi
+			data_to_sync=$(cut -f 2 $file_feeds.tmp)
+			sync_data ;;
+		$key_print|$key_printall)
+			data_to_print=$(cut -f 2 $file_feeds.tmp)
+			print_feeds ;;
+		$key_tag)
+			printf "Tag:\n$prompt"
+			read tag
+			show_feed_list ;;
+		$key_import)
+			import_export import ;;
+		*) usage ;;
+	esac
+else # It's a number
+	#answ_list_1=$(( answ_list - 1 ))
+	if [[ "$answ_list" -eq 0 || "$answ_list" -gt $nfeeds ]] # XXX: better -ge 0 ???
+	then
+		usage limits $nfeeds
+	else
+		show_feed_items
+	fi
+fi
+}
+
+show_feed_items()
+{
+url=$(sed -n ${answ_list}p $file_feeds.tmp | cut -f 2)
+sname=$(echo "$url" | sed 's@[:/&?]@_@g')
+LOCALXML=${cache}/${sname}
+
+if [[ ! -f "$LOCALXML" ]]
+then
+	data_to_sync="$url"
+	#echo "SYNC $LOCALXML"
+	sync_data new
+fi
+
+IFS='
+'
+
+# XXX: the order is messed up when we have: <title></title>
+#      (it *could* happen, but it *shouldn't*)
+
+unset title_list links_list
+for element in title_list links_list
+do
+	[[ $element = 'title_list' ]] && value=title || value=link
+	k=0
+	feeds=$($xml sel -T -t -m "/feed/item[@status='new']" -v $value -n $LOCALXML)
+	for i in $feeds
+	do
+		eval "$element[$k]=\"$i\""
+		let k=k+1
+	done
+done
+
+i=1
+maxcols=$(( $(tput cols) - 7 ))
+for f in ${title_list[@]}
+do
+	[[ ${#f} -ge "$maxcols" ]] && more='..' || more=''
+	printf "%${#max_items}u) %s\n" $(( i++ )) ${f:0:maxcols}${more}
+done | eval $pager
+
+varLOCALXML=''
+
+while [[ "$answ" != $key_quitall ]]
+do
+	printf "$prompt"
+	read answ
+
+	if [[ "$answ" = *[!0-9]* ]]
+	then
+		case $answ in
+			$key_quit)
+				[[ -n "$varLOCALXML" ]] && echo "$varLOCALXML" > $LOCALXML
+				show_feed_list ;;
+			$key_quitall)
+				exit 0 ;;
+			$key_list)
+				[[ -n "$varLOCALXML" ]] && echo "$varLOCALXML" > $LOCALXML
+				show_feed_items ;;
+			$key_browser|$key_browseralt|$key_writeurl)
+				if [[ -n "$answ_1" && -n "${links_list[$answ_1]}" ]]
+				then
+					if [[ "$answ" = $key_browser ]]
+					then
+						eval $browser "${links_list[$answ_1]}"
+					elif [[ "$answ" = $key_browseralt ]]
+					then
+						eval $browser_alt ${links_list[$answ_1]}
+					else
+						cat <<-EOB > $file_html
+						<html><head>
+						<meta http-equiv="Refresh"
+						    content="0;url=${links_list[$answ_1]}">
+						</head><body></body></html>
+EOB
+					fi
+					answ_1=''
+				else
+					echo "NO LINK!"
+				fi ;;
+			$key_update|$key_updateall|$key_refresh|$key_refreshall)
+				if [[ "$answ_list" = [${key_update}${key_updateall}] ]]
+				then
+					force_reload=1
+				fi
+				if [[ "$answ" = "$key_update" ]]
+				then
+					data_to_sync=$(sed -n ${answ_list}p $file_feeds.tmp | cut -f 2)
+				else
+					data_to_sync=$(cut -f 2 $file_feeds.tmp)
+				fi
+				sync_data ;;
+			$key_print|$key_printall)
+				if [[ "$answ" = $key_print ]]
+				then
+					data_to_print=$(sed -n ${answ_list}p $file_feeds.tmp | cut -f 2)
+				else
+					data_to_print=$(cut -f 2 $file_feeds.tmp)
+				fi
+				print_feeds ;;
+			*) echo "Type q to exit. Help: xxx" ;;
+		esac
+	else # It's a number
+		answ_1=$(( answ - 1 ))
+		if [[ "$answ_1" -ge 0 && "$answ_1" -lt ${#title_list[@]} ]]
+		then
+			printf "\n%s\n" "${title_list[$answ_1]}"
+
+			[[ -z "$varLOCALXML" ]] && varLOCALXML=$(<$LOCALXML)
+
+			feed_descr=$($xml sel -T -t -m "/feed/item[@status='new'][${answ}]" \
+			  -v "description" -n $LOCALXML | eval $browser_print)
+			#if [[ "$(echo "$feed_descr" | sed -n '$=')" -gt $(( $(tput lines) - 3 )) ]]
+			#then
+				echo "$feed_descr" | eval $pager
+			#else
+			#	echo "$feed_descr"
+			#fi
+
+			pos=$($xml sel -t -m "/feed/item[@status='new'][${answ}]" \
+			  -v "count(preceding-sibling::*[@status='read'])" $LOCALXML)
+			pos=$(( pos + answ ))
+
+			varLOCALXML=$(echo "$varLOCALXML" | \
+			  $xml ed -u "/feed/item[${pos}]/@status" -v "read")
+		else
+			usage limits $(( ${#title_list[@]} + 1 )) # XXX: correct???
+		fi
+	fi
+done
+}
+
+### Let's go
+show_feed_list
