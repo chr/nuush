@@ -249,7 +249,7 @@ do
 			num_cont=$(grep -c '<content' ${cache}/${sname}.src)
 			[[ "$num_summ" -lt "$num_cont" ]] && f_descr=content
 			f_link="link[@rel='alternate']/@href"
-			if test $(grep '<published' ${cache}/${sname}.src)
+			if grep '<published' ${cache}/${sname}.src > /dev/null
 			then
 				f_date=published
 			fi
