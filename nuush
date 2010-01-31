@@ -760,6 +760,11 @@ EOB
 					data_to_sync=$(cut -f 2 $file_feeds.tmp)
 				fi
 				sync_data ;;
+			$key_mark_read)
+				feed2mark=$(<$LOCALXML)
+				# XXX: LOCALXML == ${cache}/${sname}
+				echo "$feed2mark" | $xml ed -u "/feed/item/@status" -v "read" > ${cache}/${sname}
+				show_feed_list ;;
 			$key_print|$key_printall)
 				if [[ "$answ" = $key_print ]]
 				then
