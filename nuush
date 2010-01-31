@@ -75,6 +75,7 @@ key_change=c
 key_delfeed=d
 key_import=i
 key_list=l
+key_mark_read=r
 key_print=p
 key_printall=P
 key_quit=q
@@ -321,7 +322,7 @@ what2do=$1
 printf "$what2do what? [number]\n$prompt"
 read feed2md
 
-[[ "$feed2del" = [qQ] ]] && exit 0
+[[ "$feed2del" = [${key_quit}${key_quitall}] ]] && exit 0
 
 nfeeds=$(sed -n '$=' $file_feeds.tmp)
 
