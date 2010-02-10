@@ -232,7 +232,7 @@ do
 				    -v "normalize-space(pubDate)" ${cache}/${sname}.src)
 				epoch=$(date -d "$rssdate" +%s 2>/dev/null)
 				[[ "$?" -ne 0 ]] && echo "$rssdate: Invalid date" && exit 1
-				rsssource=$(echo "$rsssource" | \
+				rsssource=$(echo "$rsssource" |
 				    $xml ed -u "/rss/channel/item[$i]/pubDate" -v $epoch)
 			done
 			f_match=/rss/channel/item
@@ -262,15 +262,15 @@ do
 			# to '$xml sel' below.
 			f_match=/rdf/item
 			f_date=date
-			rsssource=$(echo "$rsssource" | \
+			rsssource=$(echo "$rsssource" |
 			  sed 's/rdf:RDF/rdf/g;s/[a-z]*:date/date/g')
 		;;
 	esac
 
-	echo "$rsssource" | \
+	echo "$rsssource" |
 	  $xml sel -t -e feed -m $f_match -s D:${f_date_type}:L $f_date -n \
 	    -e item -e title -v $f_title -b -n -e description -v $f_descr -b \
-		-n -e link -v "normalize-space(${f_link})" -b -n -e date -v $f_date | \
+		-n -e link -v "normalize-space(${f_link})" -b -n -e date -v $f_date |
 	  $xml ed -d "/feed/item[position()>${max_items}]" > ${cache}/${sname}.tmp
 
 	########## XXX: This BLOCK needs to be improved
@@ -279,7 +279,7 @@ do
 
 	if [[ -f "${cache}/${sname}.old" ]]
 	then
-		last_pos=$(grep '^[[:space:]]*<date>' ${cache}/${sname} |\
+		last_pos=$(grep '^[[:space:]]*<date>' ${cache}/${sname} |
 		    awk "/$last_date/ { print NR; exit }")
 
 		if [[ -n "$last_pos" ]]
@@ -297,7 +297,7 @@ do
 						do
 							prev_stat=$($xml sel -t -m "/feed/item[$j]" \
 							  -v "@status" ${cache}/${sname}.old)
-							recent=$(echo "$recent" | \
+							recent=$(echo "$recent" |
 							  $xml ed -u "/feed/item[$i]/@status" -v $prev_stat)
 							let j++
 						done
@@ -363,7 +363,7 @@ else
 			echo "Nothing was modified"
 		else
 			feed_list_file < $file_feeds > $file_feeds.tmp
-			sed "/${title_feed2md}/ s/$prev_val/$new_val_mod/" $file_feeds.tmp | \
+			sed "/${title_feed2md}/ s/$prev_val/$new_val_mod/" $file_feeds.tmp |
 			  feed_group_file > $file_feeds
 		fi
 	else
@@ -527,18 +527,17 @@ do
 		# XXX: sed ... \/* => :(
 		strip=$(echo "$feed2print" | sed '/<.xml/d;/<\/*feed/d')
 		feed_troff=$(echo "$feed_troff" ; echo "$strip")
-		echo "$feed2print" | \
+		echo "$feed2print" |
 		  sed 's/\(item status=\)"new"/\1"read"/' > ${cache}/${sname}
-		#  $xml ed -u "/feed/item/@status" -v "read" > ${cache}/${sname}
 	fi
 done
 feed_troff=$(echo "$feed_troff" && echo '</feed>')
 
-echo "$feed_troff" | \
+echo "$feed_troff" |
   $xml sel -T -t -m / -o ".2C&lt;br&gt;" -n -t -m "/feed/item[@status='new']" \
     -n -o ".LG&lt;br&gt;.B&lt;br&gt;" -n -v title \
     -o "&lt;br&gt;.R&lt;br&gt;.NL&lt;br&gt;&lt;br&gt;" -n -v description \
-    -n -o "&lt;p&gt;&lt;/p&gt;" |\
+    -n -o "&lt;p&gt;&lt;/p&gt;" |
   eval $browser_print | sed 's/^[ ]*//g' | groff -m ms | ps2pdf - $file_pdf
 exit 0
 }
@@ -665,7 +664,6 @@ then
 		*) usage ;;
 	esac
 else # It's a number
-	#answ_list_1=$(( answ_list - 1 ))
 	if [[ "$answ_list" -eq 0 || "$answ_list" -gt $nfeeds ]] # XXX: better -ge 0 ???
 	then
 		usage limits $nfeeds
@@ -684,7 +682,6 @@ LOCALXML=${cache}/${sname}
 if [[ ! -f "$LOCALXML" ]]
 then
 	data_to_sync="$url"
-	#echo "SYNC $LOCALXML"
 	sync_data new
 fi
 
@@ -769,7 +766,6 @@ EOB
 			$key_mark_read)
 				feed2mark=$(<$LOCALXML)
 				# XXX: LOCALXML == ${cache}/${sname}
-				#echo "$feed2mark" | $xml ed -u "/feed/item/@status" -v "read" > ${cache}/${sname}
 				echo "$feed2mark" | sed 's/\(item status=\)"new"/\1"read"/' > ${cache}/${sname}
 				show_feed_list ;;
 			$key_print|$key_printall)
@@ -792,18 +788,13 @@ EOB
 
 			feed_descr=$($xml sel -T -t -m "/feed/item[@status='new'][${answ}]" \
 			  -v "description" -n $LOCALXML | eval $browser_print)
-			#if [[ "$(echo "$feed_descr" | sed -n '$=')" -gt $(( $(tput lines) - 3 )) ]]
-			#then
-				echo "$feed_descr" | eval $pager
-			#else
-			#	echo "$feed_descr"
-			#fi
+			echo "$feed_descr" | eval $pager
 
 			pos=$($xml sel -t -m "/feed/item[@status='new'][${answ}]" \
 			  -v "count(preceding-sibling::*[@status='read'])" $LOCALXML)
 			pos=$(( pos + answ ))
 
-			varLOCALXML=$(echo "$varLOCALXML" | \
+			varLOCALXML=$(echo "$varLOCALXML" |
 			  $xml ed -u "/feed/item[${pos}]/@status" -v "read")
 		else
 			usage limits $(( ${#title_list[@]} + 1 )) # XXX: correct???
