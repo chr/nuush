@@ -62,7 +62,7 @@ browser_alt='screen elinks'
 browser_print='elinks -dump -force-html -no-references -no-numbering | grep -v "^ *\[.*\]$"'
 # An alternative for $browser_print:
 #browser_print='lynx -stdin -dump -force_html -hiddenlinks=ignore -nolist | grep -v "^\[.*\]$"'
-
+hide_number=0
 max_items=9
 prompt='>> '
 #
@@ -528,7 +528,8 @@ do
 		strip=$(echo "$feed2print" | sed '/<.xml/d;/<\/*feed/d')
 		feed_troff=$(echo "$feed_troff" ; echo "$strip")
 		echo "$feed2print" | \
-		  $xml ed -u "/feed/item/@status" -v "read" > ${cache}/${sname}
+		  sed 's/\(item status=\)"new"/\1"read"/' > ${cache}/${sname}
+		#  $xml ed -u "/feed/item/@status" -v "read" > ${cache}/${sname}
 	fi
 done
 feed_troff=$(echo "$feed_troff" && echo '</feed>')
@@ -615,14 +616,19 @@ fi
 
 nfeeds=$(sed -n '$=' $file_feeds.tmp) # XXX: option to remove blanks?
 i=0
+n_width=$(( ${#nfeeds} + 1 ))
 for f in $(<$file_feeds.tmp)
 do
 	sname=$(echo "$f" | cut -f 2 | sed 's@[:/&?]@_@g')
 	LOCALXML=${cache}/${sname}
+	let i++
 	n='?'
 	[[ -f "$LOCALXML" ]] && n=$(grep -c 'item status="new"' $LOCALXML)
-	printf "%${#nfeeds}u) [%2s] %s\n" $(( i + 1 )) "$n" $(echo "$f" | cut -f 1)
-	let i++
+	if [[ $hide_number = [0-9] && $n -le $hide_number ]] ; then
+		continue
+	else
+		printf "%${n_width}u) [%2s] %s\n" $i "$n" $(echo "$f" | cut -f 1)
+	fi
 done | eval $pager
 
 select_feed
@@ -763,7 +769,8 @@ EOB
 			$key_mark_read)
 				feed2mark=$(<$LOCALXML)
 				# XXX: LOCALXML == ${cache}/${sname}
-				echo "$feed2mark" | $xml ed -u "/feed/item/@status" -v "read" > ${cache}/${sname}
+				#echo "$feed2mark" | $xml ed -u "/feed/item/@status" -v "read" > ${cache}/${sname}
+				echo "$feed2mark" | sed 's/\(item status=\)"new"/\1"read"/' > ${cache}/${sname}
 				show_feed_list ;;
 			$key_print|$key_printall)
 				if [[ "$answ" = $key_print ]]
