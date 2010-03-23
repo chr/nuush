@@ -623,7 +623,7 @@ do
 	let i++
 	n='?'
 	[[ -f "$LOCALXML" ]] && n=$(grep -c 'item status="new"' $LOCALXML)
-	if [[ $hide_number = [0-9] && $n -le $hide_number ]] ; then
+	if [[ $n != '?' && $hide_number = [0-9] && $n -le $hide_number ]] ; then
 		continue
 	else
 		printf "%${n_width}u) [%2s] %s\n" $i "$n" $(echo "$f" | cut -f 1)
