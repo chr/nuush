@@ -126,6 +126,8 @@ key_update=${key_update:-u}
 key_updateall=${key_updateall:-U}
 key_writeurl=${key_writeurl:-w}
 
+reg_sn='^.a-zA-Z0-9'
+
 for i in "$pager" "$browser" "$browser_alt" "$browser_print"
 do
 	i=$(echo "$i" | cut -d ' ' -f 1)
@@ -161,7 +163,7 @@ counter=$(echo $data_to_sync | awk '{ print NF }')
 k=1
 for i in $data_to_sync
 do
-	sname=$(echo "$i" | sed 's@[:/&?]@_@g')
+	sname=$(echo "$i" | sed "s@[$reg_sn]@_@g")
 
 	if [[ "$force_reload" -ne 1 ]]
 	then
@@ -193,7 +195,9 @@ do
 		echo "$sname	$(date +%s)" >> $last_file
 	else
 		[[ -z "$non_interactive" ]] && echo Problems downloading/parsing \"$i\"
-		exit 1
+		# XXX:
+		continue
+		###exit 1
 	fi
 
 	feedtype=$($xml el ${cache}/${sname}.src | sed -n 1p)
@@ -519,7 +523,7 @@ IFS=$oldIFS
 feed_troff='<feed>'
 for i in $data_to_print
 do
-	sname=$(echo "$i" | sed 's@[:/&?]@_@g')
+	sname=$(echo "$i" | sed "s@[$reg_sn]@_@g")
 
 	if [[ -f "${cache}/${sname}" ]]
 	then
@@ -618,7 +622,7 @@ i=0
 n_width=$(( ${#nfeeds} + 1 ))
 for f in $(<$file_feeds.tmp)
 do
-	sname=$(echo "$f" | cut -f 2 | sed 's@[:/&?]@_@g')
+	sname=$(echo "$f" | cut -f 2 | sed "s@[$reg_sn]@_@g")
 	LOCALXML=${cache}/${sname}
 	let i++
 	n='?'
@@ -676,7 +680,7 @@ fi
 show_feed_items()
 {
 url=$(sed -n ${answ_list}p $file_feeds.tmp | cut -f 2)
-sname=$(echo "$url" | sed 's@[:/&?]@_@g')
+sname=$(echo "$url" | sed "s@[$reg_sn]@_@g")
 LOCALXML=${cache}/${sname}
 
 if [[ ! -f "$LOCALXML" ]]
