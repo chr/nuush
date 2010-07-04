@@ -514,6 +514,8 @@ fi
 
 print_feeds()
 {
+feed_status="[@status='new']" # Will print only unread items.
+
 for i in groff ps2pdf
 do
 	[[ ! -x $i ]] && usage no_exe $i
@@ -538,7 +540,7 @@ done
 feed_troff=$(echo "$feed_troff" && echo '</feed>')
 
 echo "$feed_troff" | \
-  $xml sel -T -t -m / -o ".2C&lt;br&gt;" -n -t -m "/feed/item[@status='new']" \
+  $xml sel -T -t -m / -o ".2C&lt;br&gt;" -n -t -m "/feed/item${feed_status}" \
     -n -o ".LG&lt;br&gt;.B&lt;br&gt;" -n -v title \
     -o "&lt;br&gt;.R&lt;br&gt;.NL&lt;br&gt;&lt;br&gt;" -n -v description \
     -n -o "&lt;p&gt;&lt;/p&gt;" | \
@@ -692,15 +694,19 @@ fi
 IFS='
 '
 
+# By default nuush shows only new (or better, unread) items. This can be
+# changed by typing 'all' at the feed menu. Type 'new' to see only unread
+# items again. Suggested by @otakukuma at http://identi.ca/otakukuma
+[[ -z $feeds_to_show ]] && feed_status='' || feed_status="[@status='new']"
+
 # XXX: the order is messed up when we have: <title></title>
 #      (it *could* happen, but it *shouldn't*)
-
 unset title_list links_list
 for element in title_list links_list
 do
 	[[ $element = 'title_list' ]] && value=title || value=link
 	k=0
-	feeds=$($xml sel -T -t -m "/feed/item[@status='new']" -v $value -n $LOCALXML)
+	feeds=$($xml sel -T -t -m "/feed/item${feed_status}" -v $value -n $LOCALXML)
 	for i in $feeds
 	do
 		eval "$element[$k]=\"$i\""
@@ -780,6 +786,8 @@ EOB
 					data_to_print=$(cut -f 2 $file_feeds.tmp)
 				fi
 				print_feeds ;;
+			new) feeds_to_show=new ; show_feed_items ;;
+			all) feeds_to_show='' ; show_feed_items ;;
 			*) echo "Type q to exit. Help: xxx" ;;
 		esac
 	else # It's a number
@@ -790,11 +798,11 @@ EOB
 
 			[[ -z "$varLOCALXML" ]] && varLOCALXML=$(<$LOCALXML)
 
-			feed_descr=$($xml sel -T -t -m "/feed/item[@status='new'][${answ}]" \
+			feed_descr=$($xml sel -T -t -m "/feed/item${feed_status}[${answ}]" \
 			  -v "description" -n $LOCALXML | eval $browser_print)
 			echo "$feed_descr" | eval $pager
 
-			pos=$($xml sel -t -m "/feed/item[@status='new'][${answ}]" \
+			pos=$($xml sel -t -m "/feed/item${feed_status}[${answ}]" \
 			  -v "count(preceding-sibling::*[@status='read'])" $LOCALXML)
 			pos=$(( pos + answ ))
 
@@ -806,6 +814,8 @@ EOB
 	fi
 done
 }
+
+feeds_to_show=new
 
 ### Let's go
 show_feed_list
