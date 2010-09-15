@@ -518,7 +518,7 @@ feed_status="[@status='new']" # Will print only unread items.
 
 for i in groff ps2pdf
 do
-	[[ ! -x $i ]] && usage no_exe $i
+	[[ ! -x $(which $i) ]] && usage no_exe $i
 done
 
 IFS=$oldIFS
@@ -709,6 +709,7 @@ do
 	feeds=$($xml sel -T -t -m "/feed/item${feed_status}" -v $value -n $LOCALXML)
 	for i in $feeds
 	do
+		# XXX: nuush: line 712: bagel imply no butter?: command not found
 		eval "$element[$k]=\"$i\""
 		let k=k+1
 	done
