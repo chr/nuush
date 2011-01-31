@@ -8,8 +8,7 @@
 umask 0027
 trap 'rm -rf $cache/*.{tmp,src} $file_feeds.tmp' EXIT
 
-usage()
-{
+usage() {
 case $1 in
 	number)
 		echo "A number was expected"
@@ -38,17 +37,17 @@ else
 	usage no_exe "xml/xmlstarlet"
 fi
 
-
+# XXX Are all these checks really necessary?
 for i in sed awk grep date cut mkdir cat mv cp rm tput ; do
 	[[ ! -x $(which $i) ]] && usage no_exe $i
 done
 
-NUUSHDIR=${HOME}/.nuush
-[[ ! -d "$NUUSHDIR" ]] && mkdir $NUUSHDIR
+NUUSHDIR=$HOME/.nuush
+[[ ! -d $NUUSHDIR ]] && mkdir $NUUSHDIR
 
 oldIFS=$IFS
 
-if [[ ! -f "${NUUSHDIR}"/nuush.conf ]] ; then
+if [[ ! -f $NUUSHDIR/nuush.conf ]] ; then
 cat << EOF > $NUUSHDIR/nuush.conf
 # See: http://chr.tx0.org/nuush#documentation
 cache=$NUUSHDIR/cache
@@ -125,30 +124,29 @@ key_writeurl=${key_writeurl:-w}
 reg_sn='^.a-zA-Z0-9'
 
 for i in "$pager" "$browser" "$browser_alt" "$browser_print" ; do
-	i=${i% *}
+	i=${i%% *}
 	[[ -n $i && ! -x $(which $i) ]] && usage no_exe $i
 done
 
 if [[ ! -f "$file_feeds" ]] ; then
-cat << EOF > $file_feeds
-Title: The Register
-URL: http://www.theregister.co.uk/headlines.atom
-Freq: d
-Tag: news,tech
+	cat <<- EOB > $file_feeds
+	Title: The Register
+	URL: http://www.theregister.co.uk/headlines.atom
+	Freq: d
+	Tag: news,tech
 
-Title: commandliners
-URL: http://feeds2.feedburner.com/commandliners
-Freq: w
-Tag: shell
-EOF
+	Title: commandliners
+	URL: http://feeds2.feedburner.com/commandliners
+	Freq: w
+	Tag: shell
+EOB
 fi
 
 [[ ! -d "$cache" ]] && mkdir -p $cache
 
 [[ -n "$3" ]] && usage # ./nuush option [argument]
 
-sync_data()
-{
+sync_data() {
 IFS=$oldIFS
 [[ ! -f "${cache}/last" ]] && > ${cache}/last
 last_file=${cache}/last
@@ -213,7 +211,6 @@ for i in $data_to_sync ; do
 
 	case $feedtype in
 		rss*)
-
 			# We need to transform the dates, so we can sort the feeds by date.
 			# The RSS date format is like 'Sat, 27 Jun 2009 04:44:38 +0000', so
 			# the sort is tricky. The (I hope temporary) solution is to replace
@@ -255,7 +252,7 @@ for i in $data_to_sync ; do
 			f_match=/rdf/item
 			f_date=date
 			rsssource=$(echo "$rsssource" | \
-			  sed 's/rdf:RDF/rdf/g;s/[a-z]*:date/date/g')
+			  sed 's/rdf:RDF/rdf/g; s/[a-z]*:date/date/g')
 		;;
 	esac
 
@@ -389,8 +386,7 @@ print "Tag: " $3
 print ""}'
 }
 
-modify_feed_list()
-{
+modify_feed_list() {
 if [[ "$answ_list" = "$key_change" ]] ; then
 	mod_del Change
 elif [[ "$answ_list" = "$key_delfeed" ]] ; then
@@ -446,8 +442,7 @@ show_feed_list
 #[[ ! "$import_feeds" ]] && show_feed_list
 }
 
-import_export()
-{
+import_export() {
 if [[ "$1" = 'import' ]] ; then
 	# XXX: absolute or relative, no path expansion
 	if [[ "$non_interactive" -ne 1  ]] ; then
@@ -480,13 +475,11 @@ EOB
 fi
 }
 
-print_feeds()
-{
+print_feeds() {
 feed_status="[@status='new']" # Will print only unread items.
 
-for i in groff ps2pdf ; do
-	[[ ! -x $(which $i) ]] && usage no_exe $i
-done
+which groff ps2pdf
+[[ $? -ne 0 ]] && usage no_exe $i
 
 IFS=$oldIFS
 feed_troff='<feed>'
@@ -566,8 +559,7 @@ if [[ -n "$1" ]] ; then
 	esac
 fi
 
-show_feed_list()
-{
+show_feed_list() {
 IFS='
 '
 
@@ -596,8 +588,7 @@ done | eval $pager
 select_feed
 }
 
-select_feed()
-{
+select_feed() {
 printf "$prompt"
 read answ_list
 
@@ -633,8 +624,7 @@ else # It's a number
 fi
 }
 
-show_feed_items()
-{
+show_feed_items() {
 url=$(sed -n ${answ_list}p $file_feeds.tmp | cut -f 2)
 sname=$(echo "$url" | sed "s@[$reg_sn]@_@g")
 LOCALXML=${cache}/${sname}
