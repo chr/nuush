@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-# chr http://chr.tx0.org/
-
 # Nuush is free and unencumbered public domain software. For more information,
 # see http://unlicense.org/ or the accompanying UNLICENSE file.
+
+# http://chr.tx0.org/nuush
 
 umask 0027
 trap 'rm -rf $cache/*.{tmp,src} $file_feeds.tmp' EXIT
