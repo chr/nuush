@@ -14,7 +14,7 @@ case $1 in
 		echo "A number was expected"
 		exit 1 ;;
 	limits)
-		echo "A number greater than 0 and less or equal to $2"
+		echo "A number >= 1 and <= $2"
 		exit 1 ;;
 	not_found)
 		echo "$2 not found"
@@ -147,6 +147,7 @@ fi
 [[ -n "$3" ]] && usage # ./nuush option [argument]
 
 sync_data() {
+# XXX vars: data_to_sync force_reload non_interactive
 IFS=$oldIFS
 [[ ! -f "${cache}/last" ]] && > ${cache}/last
 last_file=${cache}/last
@@ -279,13 +280,13 @@ for i in $data_to_sync ; do
 				else
 					recent=$(<${cache}/${sname})
 					j=1
-						for (( i=last_pos; i <= max_items; i++ )) ; do
-							prev_stat=$($xml sel -t -m "/feed/item[$j]" \
-							  -v "@status" ${cache}/${sname}.old)
-							recent=$(echo "$recent" | \
-							  $xml ed -u "/feed/item[$i]/@status" -v $prev_stat)
-							let j++
-						done
+					for (( i=last_pos; i <= max_items; i++ )) ; do
+						prev_stat=$($xml sel -t -m "/feed/item[$j]" \
+						  -v "@status" ${cache}/${sname}.old)
+						recent=$(echo "$recent" | \
+						  $xml ed -u "/feed/item[$i]/@status" -v $prev_stat)
+						let j++
+					done
 
 					echo "$recent" > ${cache}/${sname}
 				fi
@@ -303,6 +304,7 @@ force_reload=''
 }
 
 mod_del() {
+cp $NUUSHDIR/nuush.conf $NUUSHDIR/nuush.conf_backup 2>/dev/null
 what2do=$1
 printf "$what2do what? [number]\n$prompt"
 read feed2md
@@ -560,6 +562,7 @@ if [[ -n "$1" ]] ; then
 fi
 
 show_feed_list() {
+# XXX vars: tag
 IFS='
 '
 
@@ -616,9 +619,11 @@ if [[ "$answ_list" = *[!0-9]* ]] ; then
 		*) usage ;;
 	esac
 else # It's a number
-	if [[ "$answ_list" -eq 0 || "$answ_list" -gt $nfeeds ]] ; then # XXX: better -ge 0 ???
+	# XXX -eq 0 gives true if <Enter>. ???
+	if [[ "$answ_list" = '0' || "$answ_list" -gt $nfeeds ]] ; then # XXX: better -ge 0 ???
 		usage limits $nfeeds
 	else
+		[[ -z "$answ_list" ]] && answ_list=1
 		show_feed_items
 	fi
 fi
@@ -724,6 +729,7 @@ EOB
 			*) echo "Type q to exit. Help: xxx" ;;
 		esac
 	else # It's a number
+		[[ -z $answ ]] && answ=1
 		answ_1=$(( answ - 1 ))
 		if [[ "$answ_1" -ge 0 && "$answ_1" -lt ${#title_list[@]} ]] ; then
 			printf "\n%s\n" "${title_list[$answ_1]}"
