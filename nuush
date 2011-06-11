@@ -57,6 +57,9 @@ browser_alt='screen elinks'
 browser_print='elinks -dump -force-html -no-references -no-numbering | grep -v "^ *\[.*\]$"'
 # An alternative for $browser_print:
 #browser_print='lynx -stdin -dump -force_html -hiddenlinks=ignore -nolist | grep -v "^\[.*\]$"'
+key_strip=s
+key_stripalt=S
+readability='http://chr.tx0.org/pub/readability.php?url='
 hide_number=0
 max_items=9
 prompt='>> '
@@ -82,7 +85,8 @@ key_update=u
 key_updateall=U
 key_writeurl=w
 #
-### You can change $HOME for a directory available on the internet:
+### You can change $HOME for a directory available on the internet
+### (e.g., /www/docs):
 file_html=$HOME/nuush-redirect.html
 file_pdf=$HOME/nuush-paper.pdf
 #
@@ -481,7 +485,7 @@ print_feeds() {
 feed_status="[@status='new']" # Will print only unread items.
 
 which groff ps2pdf
-[[ $? -ne 0 ]] && usage no_exe $i
+[[ $? -ne 0 ]] && usage no_exe $i # XXX 'i' ??
 
 IFS=$oldIFS
 feed_troff='<feed>'
@@ -684,17 +688,24 @@ while [[ "$answ" != $key_quitall ]] ; do
 			$key_list)
 				[[ -n "$varLOCALXML" ]] && echo "$varLOCALXML" > $LOCALXML
 				show_feed_items ;;
-			$key_browser|$key_browseralt|$key_writeurl)
-				if [[ -n "$answ_1" && -n "${links_list[$answ_1]}" ]] ; then
+			$key_browser|$key_browseralt|$key_strip|$key_stripalt|$key_writeurl)
+				sel_url=${links_list[$answ_1]}
+				if [[ -n "$answ_1" && -n "$sel_url" ]] ; then
 					if [[ "$answ" = $key_browser ]] ; then
-						eval $browser "${links_list[$answ_1]}"
+						eval $browser "$sel_url"
 					elif [[ "$answ" = $key_browseralt ]] ; then
-						eval $browser_alt ${links_list[$answ_1]}
+						eval $browser_alt "$sel_url"
+					elif [[ "$answ" = $key_strip ]] ; then
+						[[ -z $readability ]] && echo 'No readability'
+						eval $browser "${readability}${sel_url}"
+					elif [[ "$answ" = $key_stripalt ]] ; then
+						[[ -z $readability ]] && echo 'No readability'
+						eval $browser_alt "$readability}${sel_url}"
 					else
 						cat <<-EOB > $file_html
 						<html><head>
 						<meta http-equiv="Refresh"
-						    content="0;url=${links_list[$answ_1]}">
+						    content="0;url=$sel_url">
 						</head><body></body></html>
 EOB
 					fi
