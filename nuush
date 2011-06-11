@@ -59,7 +59,7 @@ browser_print='elinks -dump -force-html -no-references -no-numbering | grep -v "
 #browser_print='lynx -stdin -dump -force_html -hiddenlinks=ignore -nolist | grep -v "^\[.*\]$"'
 key_strip=s
 key_stripalt=S
-readability='http://chr.tx0.org/pub/readability.php?url='
+readability='http://chr.tx0.org/pub/readability?url='
 hide_number=0
 max_items=9
 prompt='>> '
