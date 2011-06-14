@@ -516,7 +516,8 @@ print_feeds()
 {
 for i in groff ps2pdf
 do
-	[[ ! -x $i ]] && usage no_exe $i
+	which $i >/dev/null 2>&1
+	[[ $? != 0 ]] && usage no_exe $i
 done
 
 IFS=$oldIFS
