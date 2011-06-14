@@ -38,9 +38,9 @@ else
 fi
 
 # XXX Are all these checks really necessary?
-for i in sed awk grep date cut mkdir cat mv cp rm tput ; do
-	[[ ! -x $(which $i) ]] && usage no_exe $i
-done
+#for i in sed awk grep date cut mkdir cat mv cp rm tput ; do
+#	[[ ! -x $(which $i) ]] && usage no_exe $i
+#done
 
 NUUSHDIR=$HOME/.nuush
 [[ ! -d $NUUSHDIR ]] && mkdir $NUUSHDIR
@@ -668,6 +668,7 @@ done
 
 i=1
 maxcols=$(( $(tput cols) - 7 ))
+[[ -z $maxcols ]] && maxcols=70
 for f in ${title_list[@]} ; do
 	[[ ${#f} -ge "$maxcols" ]] && more='..' || more=''
 	printf "%${#max_items}u) %s\n" $(( i++ )) ${f:0:maxcols}${more}
