@@ -484,10 +484,8 @@ fi
 print_feeds() {
 feed_status="[@status='new']" # Will print only unread items.
 
-for i in groff ps2pdf
-do
-    which $i >/dev/null 2>&1
-    [[ $? -ne 0 ]] && usage no_exe $i
+for i in groff ps2pdf ; do
+	[[ ! -x $(which $i) ]] && usage no_exe $i
 done
 
 IFS=$oldIFS
