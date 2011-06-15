@@ -105,7 +105,6 @@ browser=${browser:-elinks}
 browser_alt=${browser_alt:-'screen elinks'}
 browser_print=${browser_print:-'elinks -dump -no-references -no-numbering | grep -v "^ *\[.*\]$"'}
 max_items=${max_items:-9}
-pager=${PAGER:-more}
 prompt=${prompt:-'>> '}
 key_add=${key_add:-a}
 key_browser=${key_browser:-g}
@@ -127,7 +126,7 @@ key_writeurl=${key_writeurl:-w}
 
 reg_sn='^.a-zA-Z0-9'
 
-for i in "$pager" "$browser" "$browser_alt" "$browser_print" ; do
+for i in "$browser" "$browser_alt" "$browser_print" ; do
 	i=${i%% *}
 	[[ -n $i && ! -x $(which $i) ]] && usage no_exe $i
 done
@@ -591,7 +590,7 @@ for f in $(<$file_feeds.tmp) ; do
 	else
 		printf "%${n_width}u) [%2s] %s\n" $i "$n" $(echo "$f" | cut -f 1)
 	fi
-done | eval $pager
+done | less -FX
 
 select_feed
 }
@@ -672,7 +671,7 @@ maxcols=$(( $(tput cols) - 7 ))
 for f in ${title_list[@]} ; do
 	[[ ${#f} -ge "$maxcols" ]] && more='..' || more=''
 	printf "%${#max_items}u) %s\n" $(( i++ )) ${f:0:maxcols}${more}
-done | eval $pager
+done | less -FX
 
 varLOCALXML=''
 
@@ -751,7 +750,7 @@ EOB
 
 			feed_descr=$($xml sel -T -t -m "/feed/item${feed_status}[${answ}]" \
 			  -v "description" -n $LOCALXML | eval $browser_print)
-			echo "$feed_descr" | eval $pager
+			echo "$feed_descr" | less -FX
 
 			pos=$($xml sel -t -m "/feed/item${feed_status}[${answ}]" \
 			  -v "count(preceding-sibling::*[@status='read'])" $LOCALXML)
